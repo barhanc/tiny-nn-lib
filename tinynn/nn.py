@@ -4,16 +4,7 @@ from abc import abstractmethod, ABC
 from typing import Optional, Literal
 from numpy.typing import NDArray
 
-from .utils import *
-
-__all__ = [
-    "Layer",
-    "Sequential",
-    "Sigmoid",
-    "ReLU",
-    "Linear",
-    "Dropout",
-]
+from .utils import zeros, limit_weights, rand
 
 
 class Layer(ABC):
@@ -112,6 +103,33 @@ class ReLU(Layer):
         return grad_x
 
 
+class Dropout(Layer):
+    def __init__(self, p: float):
+        assert 0 < p <= 1
+        self.p: float = p
+        self.reset()
+
+    def reset(self):
+        self.y: Optional[NDArray] = None
+        # Dropout mask, required for backpropagation
+        self.mask: Optional[NDArray] = None
+
+    def forward(self, x: NDArray, training: bool) -> NDArray:
+        if training:
+            # --- Save the dropout mask for backward pass
+            self.mask = (rand(*x.shape) > self.p).astype(np.float32)
+            self.y = x * self.mask
+        else:
+            self.y = x * (1 - self.p)
+        return self.y
+
+    def backward(self, x: NDArray, grad_y: NDArray) -> NDArray:
+        # --- Compute ∂Loss/∂x
+        grad_x = grad_y * self.mask
+        # --- Propagate ∂Loss/∂x backward
+        return grad_x
+
+
 class Linear(Layer):
     def __init__(
         self,
@@ -185,28 +203,9 @@ class Linear(Layer):
         return grad_x
 
 
-class Dropout(Layer):
-    def __init__(self, p: float):
-        assert 0 < p <= 1
-        self.p: float = p
-        self.reset()
-
-    def reset(self):
-        self.y: Optional[NDArray] = None
-        # Dropout mask, required for backpropagation
-        self.mask: Optional[NDArray] = None
-
-    def forward(self, x: NDArray, training: bool) -> NDArray:
-        if training:
-            # --- Save the dropout mask for backward pass
-            self.mask = (rand(*x.shape) > self.p).astype(np.float32)
-            self.y = x * self.mask
-        else:
-            self.y = x * (1 - self.p)
-        return self.y
-
-    def backward(self, x: NDArray, grad_y: NDArray) -> NDArray:
-        # --- Compute ∂Loss/∂x
-        grad_x = grad_y * self.mask
-        # --- Propagate ∂Loss/∂x backward
-        return grad_x
+# TODO:
+class Conv2D(Layer):
+    def __init__(self): ...
+    def reset(self): ...
+    def forward(self, x: NDArray, training: bool) -> NDArray: ...
+    def backward(self, x: NDArray, grad_y: NDArray) -> NDArray: ...

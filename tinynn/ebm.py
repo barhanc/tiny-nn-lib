@@ -2,16 +2,11 @@ import numpy as np
 
 from itertools import pairwise
 from typing import Optional, Literal, Callable
+
+from tqdm import trange
 from numpy.typing import NDArray
 
-from .utils import *
-
-__all__ = [
-    "RBM",
-    "DBN",
-    "cdk_step",
-    "pcd_step",
-]
+from .utils import zeros, limit_weights
 
 
 class RBM:
@@ -77,9 +72,9 @@ class RBM:
     def probas_h(self, v: NDArray, sample: bool) -> NDArray:
         return self.h_activation(self.c + v @ self.w, sample=sample)
 
-    def sample(self, v: NDArray, steps: int) -> NDArray:
+    def sample(self, v: NDArray, steps: int, verbose: bool = False) -> NDArray:
         # --- Gibbs sampling
-        for k in range(steps):
+        for k in trange(steps, desc="Sampling", disable=not verbose):
             h = self.probas_h(v, sample=True)
             v = self.probas_v(h, sample=(k < steps - 1))
         return v
@@ -103,10 +98,10 @@ class DBN:
             h = self.layers[i].probas_v(h, sample=False)
         return h
 
-    def sample(self, v: NDArray, steps: int) -> NDArray:
+    def sample(self, v: NDArray, steps: int, verbose: bool = False) -> NDArray:
         i = len(self.layers) - 1
         v = self.propagate_up(v, i)
-        h = self.layers[i].sample(v, steps)
+        h = self.layers[i].sample(v, steps, verbose)
         return self.propagate_dn(h, i)
 
 

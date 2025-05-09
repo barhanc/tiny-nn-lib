@@ -23,6 +23,11 @@ def chunks(*arrays: NDArray, size: int):
         yield batch[0] if len(batch) == 1 else batch
 
 
+def onehot(y: NDArray) -> NDArray:
+    n_values = np.max(y) + 1
+    return np.eye(n_values)[y]
+
+
 def tiles(imgs: NDArray):
     space = 2
     rows, cols, h, w = imgs.shape
@@ -34,9 +39,9 @@ def tiles(imgs: NDArray):
         for c in range(cols):
             x = r * (h + space)
             y = c * (w + space)
-            ex_min = np.min(imgs[r, c])
-            ex_max = np.max(imgs[r, c])
-            img_matrix[x : x + h, y : y + w] = (imgs[r, c] - ex_min) / (ex_max - ex_min)
+            m = np.min(imgs[r, c])
+            M = np.max(imgs[r, c])
+            img_matrix[x : x + h, y : y + w] = (imgs[r, c] - m) / (M - m)
 
     plt.matshow(img_matrix, cmap="gray", interpolation="none")
     plt.axis("off")
