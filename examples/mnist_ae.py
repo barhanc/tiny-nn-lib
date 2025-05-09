@@ -27,8 +27,6 @@ X_train = X_train[:size, ...]
 X_test = mnist.test_images().astype(np.float32) / 255.0
 X_test = X_test.reshape(-1, 28 * 28)
 
-tiles(X_train[: 12 * 24, ...].reshape(-1, 24, 28, 28))
-
 # %%
 # Define Autoencoder
 # ------------------
