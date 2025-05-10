@@ -73,7 +73,7 @@ class RBM:
         return self.h_activation(self.c + v @ self.w, sample=sample)
 
     def sample(self, v: NDArray, steps: int, verbose: bool = False) -> NDArray:
-        # --- Gibbs sampling
+        # Gibbs sampling
         for k in trange(steps, desc="Sampling", disable=not verbose):
             h = self.probas_h(v, sample=True)
             v = self.probas_v(h, sample=(k < steps - 1))
@@ -112,23 +112,23 @@ def cdk_step(rbm: RBM, minibatch: NDArray, k: int = 1):
     # Compute gradients
     # -----------------
 
-    # Positive phase
+    # --- Positive phase
     σ = rbm.probas_h(v, sample=False)
 
     grad_w = -1 / batch_size * (v.T @ σ)
     grad_b = -1 / batch_size * (v.sum(axis=0))
     grad_c = -1 / batch_size * (σ.sum(axis=0))
 
-    # Negative phase
+    # --- Negative phase
 
-    # --- Gibbs sampling
+    # Gibbs sampling
     h = rbm.probas_h(v, sample=True)
     v = rbm.probas_v(h, sample=True)
     for _ in range(k - 1):
         h = rbm.probas_h(v, sample=True)
         v = rbm.probas_v(h, sample=True)
 
-    # --- Negative gradient estimation
+    # Negative gradient estimation
     σ = rbm.probas_h(v, sample=False)
 
     grad_w += 1 / batch_size * (v.T @ σ)
@@ -138,7 +138,7 @@ def cdk_step(rbm: RBM, minibatch: NDArray, k: int = 1):
     # Update params
     # -------------
 
-    # --- Apply L1 / L2 regularization
+    # Apply L1 / L2 regularization
     if rbm.l1_penalty:
         grad_w += rbm.l1_penalty * np.sign(rbm.w)
     if rbm.l2_penalty:
@@ -152,7 +152,7 @@ def cdk_step(rbm: RBM, minibatch: NDArray, k: int = 1):
     rbm.b += rbm.m_b
     rbm.c += rbm.m_c
 
-    # --- Apply weight limit normalization
+    # Apply weight limit normalization
     if rbm.weight_limit:
         rbm.w = limit_weights(rbm.w, rbm.weight_limit)
 
@@ -164,38 +164,40 @@ def pcd_step(rbm: RBM, minibatch: NDArray, k: int = 1):
     # Compute gradients
     # -----------------
 
-    # Positive phase
+    # --- Positive phase
     σ = rbm.probas_h(v, sample=False)
 
     grad_w = -1 / batch_size * (v.T @ σ)
     grad_b = -1 / batch_size * (v.sum(axis=0))
     grad_c = -1 / batch_size * (σ.sum(axis=0))
 
-    # Negative phase
+    # --- Negative phase
 
-    # --- Gibbs sampling
-    h = rbm.pc  # Start from persistent chain
+    # Gibbs sampling
+    # Start from persistent chain
+    h = rbm.pc
     v = rbm.probas_v(h, sample=True)
     for _ in range(k - 1):
         h = rbm.probas_h(v, sample=True)
         v = rbm.probas_v(h, sample=True)
 
-    # --- Negative gradient estimation
+    # Negative gradient estimation
     σ = rbm.probas_h(v, sample=False)
 
     grad_w += 1 / rbm.pc_size * (v.T @ σ)
     grad_b += 1 / rbm.pc_size * (v.sum(axis=0))
     grad_c += 1 / rbm.pc_size * (σ.sum(axis=0))
 
-    # --- Update persistent chain
+    # Update persistent chain
     rbm.pc = rbm.probas_h(v, sample=True)
 
     # Update params
     # -------------
 
-    # --- Apply L1 / L2 regularization
+    # Apply L1 / L2 regularization
     if rbm.l1_penalty:
         grad_w += rbm.l1_penalty * np.sign(rbm.w)
+
     if rbm.l2_penalty:
         grad_w += rbm.l2_penalty * rbm.w
 
@@ -207,6 +209,6 @@ def pcd_step(rbm: RBM, minibatch: NDArray, k: int = 1):
     rbm.b += rbm.m_b
     rbm.c += rbm.m_c
 
-    # --- Apply weight limit normalization
+    # Apply weight limit normalization
     if rbm.weight_limit:
         rbm.w = limit_weights(rbm.w, rbm.weight_limit)

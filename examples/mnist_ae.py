@@ -73,22 +73,22 @@ for epoch in (pbar := trange(num_epochs)):
     dataloader = chunks(X_train, size=batch_size)
     total = ceil(len(X_train) / batch_size)
 
-    # --- Training phase
+    # Training phase
     for X_batch in dataloader:
-        # --- Forward pass
+        # Forward pass
         logits = autoencoder.forward(X_batch, training=True)
 
-        # --- Compute gradient of the loss function w.r.t. the outputs of the network, assuming that
-        #     the loss function is the *pixelwise binary cross entropy*.
+        # Compute gradient of the loss function w.r.t. the outputs of the network, assuming that the
+        # loss function is the *pixelwise binary cross entropy*.
         grad_y = 1 / len(X_batch) * (sigmoid(logits) - X_batch)
 
-        # --- Backward pass
+        # Backward pass
         autoencoder.backward(X_batch, grad_y)
 
-    # --- Validation phase
+    # Validation phase
     valid_loss = cross_entropy(X_test, autoencoder.forward(X_test, training=False))
 
-    # --- Log progress
+    # Log progress
     pbar.set_description(f"Epoch {epoch+1:>3d} | Valid. Loss {valid_loss:>2.2f} |")
 
 # %%

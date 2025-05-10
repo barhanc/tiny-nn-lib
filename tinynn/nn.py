@@ -60,9 +60,9 @@ class Sequential(Layer):
 
     def backward(self, x: NDArray, grad_y: NDArray) -> NDArray:
         for i in reversed(range(len(self.layers))):
-            # --- Get input to the i-th layer i.e. output of the (i-1)-th layer (or `x` if i=0)
+            # Get input to the i-th layer i.e. output of the (i-1)-th layer (or `x` if i=0)
             y_prev = self.layers[i - 1].y if i > 0 else x
-            # --- Propagate the ∂Loss/∂y backward through layer `i` and update params
+            # Propagate the ∂Loss/∂y backward through layer `i` and update params
             grad_y = self.layers[i].backward(y_prev, grad_y)
         return grad_y
 
@@ -79,9 +79,9 @@ class Sigmoid(Layer):
         return self.y
 
     def backward(self, x: NDArray, grad_y: NDArray) -> NDArray:
-        # --- Compute ∂Loss/∂x
+        # Compute ∂Loss/∂x
         grad_x = grad_y * (self.y * (1.0 - self.y))
-        # --- Propagate ∂Loss/∂x backward
+        # Propagate ∂Loss/∂x backward
         return grad_x
 
 
@@ -97,9 +97,9 @@ class ReLU(Layer):
         return self.y
 
     def backward(self, x: NDArray, grad_y: NDArray) -> NDArray:
-        # --- Compute ∂Loss/∂x
+        # Compute ∂Loss/∂x
         grad_x = grad_y * (x > 0).astype(np.float32)
-        # --- Propagate ∂Loss/∂x backward
+        # Propagate ∂Loss/∂x backward
         return grad_x
 
 
@@ -116,7 +116,7 @@ class Dropout(Layer):
 
     def forward(self, x: NDArray, training: bool) -> NDArray:
         if training:
-            # --- Save the dropout mask for backward pass
+            # Save the dropout mask for backward pass
             self.mask = (rand(*x.shape) > self.p).astype(np.float32)
             self.y = x * self.mask
         else:
@@ -124,9 +124,9 @@ class Dropout(Layer):
         return self.y
 
     def backward(self, x: NDArray, grad_y: NDArray) -> NDArray:
-        # --- Compute ∂Loss/∂x
+        # Compute ∂Loss/∂x
         grad_x = grad_y * self.mask
-        # --- Propagate ∂Loss/∂x backward
+        # Propagate ∂Loss/∂x backward
         return grad_x
 
 
@@ -177,29 +177,29 @@ class Linear(Layer):
         return self.y
 
     def backward(self, x: NDArray, grad_y: NDArray) -> NDArray:
-        # --- Compute ∂Loss/∂x
+        # Compute ∂Loss/∂x
         grad_x = grad_y @ self.w.T
 
-        # --- Compute  ∂Loss/∂w and ∂Loss/∂b
+        # Compute  ∂Loss/∂w and ∂Loss/∂b
         grad_w = x.T @ grad_y
         grad_b = grad_y.sum(axis=0)
 
-        # --- Apply L2 regularization
+        # Apply L2 regularization
         if self.l2_penalty:
             grad_w += self.l2_penalty * self.w
 
-        # --- Update params
+        # Update params
         self.m_w = self.momentum * self.m_w - self.lr * grad_w
         self.m_b = self.momentum * self.m_b - self.lr * grad_b
 
         self.w += self.m_w
         self.b += self.m_b
 
-        # --- Apply weight limit normalization
+        # Apply weight limit normalization
         if self.weight_limit:
             self.w = limit_weights(self.w, self.weight_limit)
 
-        # --- Propagate ∂Loss/∂x backward
+        # Propagate ∂Loss/∂x backward
         return grad_x
 
 
@@ -283,6 +283,7 @@ class Conv2D(Layer):
         idx_c = idx_c.reshape(-1, 1)
         idx_h = idx_h_ker.reshape(-1, 1) + self.strides[0] * idx_h_out
         idx_w = idx_w_ker.reshape(-1, 1) + self.strides[1] * idx_w_out
+
         self.indices = (idx_c, idx_h, idx_w)
 
         x = self._pad(x)

@@ -66,23 +66,23 @@ for epoch in (pbar := trange(num_epochs)):
     dataloader = chunks(X_train, y_train, size=batch_size)
     total = ceil(len(X_train) / batch_size)
 
-    # --- Training phase
+    # Training phase
     for X_batch, y_batch in dataloader:
-        # --- Forward pass
+        # Forward pass
         logits = mlp.forward(X_batch, training=True)
 
-        # --- Compute gradient of the loss function w.r.t. the outputs of the network, assuming that
-        #     the loss function is the cross entropy
+        # Compute gradient of the loss function w.r.t. the outputs of the network, assuming that the
+        # loss function is the cross entropy
         grad_y = 1 / len(X_batch) * (softmax(logits) - y_batch)
 
-        # --- Backward pass
+        # Backward pass
         mlp.backward(X_batch, grad_y)
 
-    # --- Validation phase
+    # Validation phase
     logits = mlp.forward(X_test, training=False)
     accuracy = 1 / len(y_test) * np.sum(np.argmax(logits, axis=1) == y_test)
 
-    # --- Log progress
+    # Log progress
     pbar.set_description(f"Epoch {epoch+1:>3d} | Accuracy {accuracy:>2.2%} |")
 
 
