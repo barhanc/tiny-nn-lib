@@ -34,37 +34,33 @@ X_test = mnist.test_images().astype(np.float32) / 255.0
 X_test = X_test.reshape(-1, 28 * 28)
 y_test = mnist.test_labels()
 
-tiles(X_train[: 12 * 24, ...].reshape(-1, 24, 28, 28))
-
 # %%
 # Define MLP model
 # ---------------
 params = {
     "lr": 0.05,
-    "momentum": 0.95,
-    "weight_limit": 5.0,
+    "momentum": 0.9,
+    "weight_limit": None,
     "l2_penalty": None,
     "init_method": "He",
 }
 
 mlp = nn.Sequential(
+    nn.Dropout(p=0.2),
     nn.Linear(vsize=784, hsize=512, **params),
     nn.ReLU(),
-    nn.Dropout(p=0.5),
-    nn.Linear(vsize=512, hsize=256, **params),
+    nn.Dropout(p=0.2),
+    nn.Linear(vsize=512, hsize=512, **params),
     nn.ReLU(),
-    nn.Dropout(p=0.5),
-    nn.Linear(vsize=256, hsize=128, **params),
-    nn.ReLU(),
-    nn.Dropout(p=0.5),
-    nn.Linear(vsize=128, hsize=10, **params),
+    nn.Dropout(p=0.2),
+    nn.Linear(vsize=512, hsize=10, **params),
 )
 
 # %%
 # Training loop
 # -------------
 batch_size = 128
-num_epochs = 200
+num_epochs = 50
 
 for epoch in (pbar := trange(num_epochs)):
     dataloader = chunks(X_train, y_train, size=batch_size)
