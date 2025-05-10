@@ -4,7 +4,7 @@ import torch.nn
 import tinynn.nn
 import numpy as np
 
-torch.manual_seed(42)
+# torch.manual_seed(42)
 torch.set_default_device("cpu")
 
 in_channels = 3
@@ -22,7 +22,7 @@ conv2 = tinynn.nn.Conv2D(in_channels, out_channels, kernel_size, stride, padding
 conv2.w = w.numpy().reshape(-1, in_channels * kernel_size[0] * kernel_size[1])
 conv2.b = b.numpy().reshape(-1, 1)
 
-x = torch.randn(128, in_channels, 64, 64, dtype=torch.float64)
+x = torch.randn(128, in_channels, 28, 28, dtype=torch.float64)
 t = time.perf_counter()
 y1 = conv1(x).detach().numpy()
 t = time.perf_counter() - t
@@ -31,4 +31,4 @@ t = time.perf_counter()
 y2 = conv2.forward(x.numpy(), training=False)
 t = time.perf_counter() - t
 print("Numpy ", t)
-print(np.allclose(y1, y2))
+assert np.allclose(y1, y2)
