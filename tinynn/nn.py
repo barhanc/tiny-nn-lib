@@ -4,7 +4,7 @@ from abc import abstractmethod, ABC
 from typing import Optional, Literal
 from numpy.typing import NDArray
 
-from .utils import zeros, limit_weights, rand
+from utils import zeros, limit_weights, rand
 
 
 class Layer(ABC):
@@ -162,7 +162,7 @@ class Linear(Layer):
             case _:
                 raise ValueError(f"Unrecognised {self.init_method=}")
 
-        # Biases initialization
+        # Bias initialization
         self.b = zeros(self.hsize)
 
         # Velocity (momentum) tensors initialization
@@ -203,9 +203,144 @@ class Linear(Layer):
         return grad_x
 
 
-# TODO:
 class Conv2D(Layer):
-    def __init__(self): ...
-    def reset(self): ...
-    def forward(self, x: NDArray, training: bool) -> NDArray: ...
-    def backward(self, x: NDArray, grad_y: NDArray) -> NDArray: ...
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: tuple[int, int],
+        strides: tuple[int, int],
+        padding: tuple[int, int],
+        lr: float,
+        momentum: float,
+        init_method: Literal["Xavier", "He"],
+    ):
+        self.in_channels: int = in_channels
+        self.out_channels: int = out_channels
+        self.kernel_size: tuple[int, int] = kernel_size
+        self.strides: tuple[int, int] = strides
+        self.padding: tuple[int, int] = padding
+
+        self.lr: float = lr
+        self.momentum: float = momentum
+        self.init_method: Literal["Xavier", "He"] = init_method
+
+        self.reset()
+
+    def reset(self):
+        # Weights initialization
+        nrow = self.out_channels
+        ncol = self.in_channels * self.kernel_size[0] * self.kernel_size[1]
+
+        match self.init_method:
+            case "Xavier":
+                scale = np.sqrt(6 / (nrow + ncol))
+                self.w = np.random.uniform(-scale, +scale, size=(nrow, ncol)).astype(np.float32)
+            case "He":
+                scale = np.sqrt(4 / (nrow + ncol))
+                self.w = np.random.normal(0, scale, size=(nrow, ncol)).astype(np.float32)
+            case _:
+                raise ValueError(f"Unrecognised {self.init_method=}")
+
+        # Bias initialization
+        self.b = zeros(self.out_channels, 1)
+
+        # Velocity (momentum) tensors initialization
+        self.m_w = zeros(nrow, ncol)
+        self.m_b = zeros(nrow, 1)
+
+        # Outputs
+        self.y: Optional[NDArray] = None
+
+        # TODO: description
+        self.indices: Optional[tuple[NDArray, NDArray, NDArray]] = None
+
+    def _pad(self, x: NDArray) -> NDArray:
+        assert len(x.shape) == 4
+        pad_h, pad_w = self.padding
+        return np.pad(x, pad_width=[(0, 0), (0, 0), (pad_h, pad_h), (pad_w, pad_w)])
+
+    def _unpad(self, x: NDArray) -> NDArray:
+        assert len(x.shape) == 4
+        *_, H, W = x.shape
+        pad_h, pad_w = self.padding
+        return x[:, :, pad_h : H - pad_h, pad_w : W - pad_w]
+
+    def forward(self, x: NDArray, training: bool) -> NDArray:
+        assert len(x.shape) == 4
+        assert x.shape[1] == self.in_channels
+
+        _, C_in, H_in, W_in = x.shape
+        H_ker, W_ker = self.kernel_size
+
+        C_out = self.out_channels
+        H_out = int(1 + (H_in + 2 * self.padding[0] - self.kernel_size[0]) / self.strides[0])
+        W_out = int(1 + (W_in + 2 * self.padding[1] - self.kernel_size[1]) / self.strides[1])
+
+        idx_c, idx_h_ker, idx_w_ker = np.indices((C_in, H_ker, W_ker)).reshape(3, -1)
+        idx_h_out, idx_w_out = np.indices((H_out, W_out)).reshape(2, -1)
+
+        idx_c = idx_c.reshape(-1, 1)
+        idx_h = idx_h_ker.reshape(-1, 1) + self.strides[0] * idx_h_out
+        idx_w = idx_w_ker.reshape(-1, 1) + self.strides[1] * idx_w_out
+        self.indices = (idx_c, idx_h, idx_w)
+
+        x = self._pad(x)
+        x = x[(..., *self.indices)]
+        x = self.b + self.w @ x
+
+        self.y = x.reshape(-1, C_out, H_out, W_out)
+
+        return self.y
+
+    def backward(self, x: NDArray, grad_y: NDArray) -> NDArray:
+        _, C_in, H_in, W_in = x.shape
+        C_out = self.out_channels
+        H_out = int(1 + (H_in + 2 * self.padding[0] - self.kernel_size[0]) / self.strides[0])
+        W_out = int(1 + (W_in + 2 * self.padding[1] - self.kernel_size[1]) / self.strides[1])
+
+        grad_x = grad_y.reshape(-1, C_out, H_out * W_out)
+
+        grad_w = (grad_x @ x.transpose(0, 2, 1)).sum(axis=0)
+        grad_b = grad_x.sum(axis=(0, 2)).reshape(-1, 1)
+        grad_x = self.w.T @ grad_x
+
+        # TODO
+        raise NotImplementedError
+
+        grad_x = self._unpad(grad_x)
+
+
+if __name__ == "__main__":
+    import time
+    import torch
+    import torch.nn as nn
+
+    torch.manual_seed(42)
+    torch.set_default_device("cpu")
+
+    in_channels = 3
+    out_channels = 10
+    kernel_size = (3, 3)
+    stride = (3, 3)
+    padding = (1, 1)
+
+    conv1 = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dtype=torch.float64)
+    params = conv1.parameters()
+    w = next(params).detach()
+    b = next(params).detach()
+
+    conv2 = Conv2D(in_channels, out_channels, kernel_size, stride, padding, None, None, "Xavier")
+    conv2.w = w.numpy().reshape(-1, in_channels * kernel_size[0] * kernel_size[1])
+    conv2.b = b.numpy().reshape(-1, 1)
+
+    x = torch.randn(128, in_channels, 64, 64, dtype=torch.float64)
+    t = time.perf_counter()
+    y1 = conv1(x).detach().numpy()
+    t = time.perf_counter() - t
+    print("Torch ", t)
+    t = time.perf_counter()
+    y2 = conv2.forward(x.numpy(), training=False)
+    t = time.perf_counter() - t
+    print("Numpy ", t)
+    print(np.allclose(y1, y2))
