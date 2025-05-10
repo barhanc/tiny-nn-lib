@@ -84,7 +84,13 @@ class DBN:
     def __init__(self, *rbms: RBM):
         for rbm1, rbm2 in pairwise(rbms):
             assert rbm1.hsize == rbm2.vsize
+
         self.layers: tuple[RBM, ...] = rbms
+        self.reset()
+
+    def reset(self):
+        for rbm in self.layers:
+            rbm.reset()
 
     def propagate_up(self, v: NDArray, n_layers: int) -> NDArray:
         assert 0 <= n_layers < len(self.layers)

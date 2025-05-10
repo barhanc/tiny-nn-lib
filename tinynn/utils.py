@@ -3,15 +3,15 @@ import matplotlib.pyplot as plt
 from numpy.typing import NDArray
 
 
-def zeros(*dims: int) -> NDArray:
+def zeros(*dims: int) -> NDArray[np.float32]:
     return np.zeros(shape=tuple(dims), dtype=np.float32)
 
 
-def rand(*dims: int) -> NDArray:
+def rand(*dims: int) -> NDArray[np.float32]:
     return np.random.rand(*dims).astype(np.float32)
 
 
-def randn(*dims: int) -> NDArray:
+def randn(*dims: int) -> NDArray[np.float32]:
     return np.random.randn(*dims).astype(np.float32)
 
 
@@ -66,7 +66,7 @@ def sigmoid(x: NDArray, sample: bool = False) -> NDArray:
 
 def relu(x: NDArray, sample: bool = False) -> NDArray:
     if sample:
-        return np.maximum(0, x + sigmoid(x) * randn(*x.shape))
+        return np.maximum(0, x + np.sqrt(sigmoid(x)) * randn(*x.shape))
     return np.maximum(0, x)
 
 
