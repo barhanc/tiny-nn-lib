@@ -53,7 +53,7 @@ class RBM:
             case _:
                 raise ValueError(f"Unrecognised {self.init_method=}")
 
-        # Bias initialization
+        # Biases initialization
         self.b = zeros(self.vsize)
         self.c = zeros(self.hsize)
 
