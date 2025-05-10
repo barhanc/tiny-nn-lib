@@ -4,7 +4,7 @@ from abc import abstractmethod, ABC
 from typing import Optional, Literal
 from numpy.typing import NDArray
 
-from utils import zeros, limit_weights, rand
+from .utils import zeros, limit_weights, rand
 
 
 class Layer(ABC):
@@ -55,7 +55,7 @@ class Sequential(Layer):
     def forward(self, x: NDArray, training: bool) -> NDArray:
         for layer in self.layers:
             x = layer.forward(x, training)
-        self.y = x
+        self.y = x.copy()
         return self.y
 
     def backward(self, x: NDArray, grad_y: NDArray) -> NDArray:
