@@ -208,18 +208,18 @@ class Conv2D(Layer):
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: tuple[int, int],
-        strides: tuple[int, int],
-        padding: tuple[int, int],
+        kernel_size: int | tuple[int, int],
+        strides: int | tuple[int, int],
+        padding: int | tuple[int, int],
         lr: float,
         momentum: float,
         init_method: Literal["Xavier", "He"],
     ):
         self.in_channels: int = in_channels
         self.out_channels: int = out_channels
-        self.kernel_size: tuple[int, int] = kernel_size
-        self.strides: tuple[int, int] = strides
-        self.padding: tuple[int, int] = padding
+        self.kernel_size: tuple[int, int] = (kernel_size, kernel_size) if isinstance(kernel_size, int) else kernel_size
+        self.strides: tuple[int, int] = (strides, strides) if isinstance(strides, int) else strides
+        self.padding: tuple[int, int] = (padding, padding) if isinstance(padding, int) else padding
 
         self.lr: float = lr
         self.momentum: float = momentum
@@ -243,7 +243,8 @@ class Conv2D(Layer):
                 raise ValueError(f"Unrecognised {self.init_method=}")
 
         # Bias initialization
-        self.b = zeros(self.out_channels, 1)
+        eps = 1e-2  # Initialize biases to small positive values (for ReLU)
+        self.b = zeros(self.out_channels, 1) + eps
 
         # Velocity (momentum) tensors initialization
         self.m_w = zeros(nrow, ncol)
@@ -252,8 +253,14 @@ class Conv2D(Layer):
         # Outputs
         self.y: Optional[NDArray] = None
 
-        # Indices for the im2col operation, required for backpropagation
-        self.indices: Optional[tuple[NDArray, NDArray, NDArray]] = None
+        # Cached indices for the im2col/col2im transformation
+        self._indices: Optional[tuple[NDArray, NDArray, NDArray]] = None
+        self._indices_ravel: Optional[NDArray] = None
+        # Input tensor after im2col transformation
+        self._x2col: Optional[NDArray] = None
+        # Input tensor shape from the last iteration of, respectively the forward and backward
+        self._dims_x_f: Optional[tuple[int, int, int, int]] = None
+        self._dims_x_b: Optional[tuple[int, int, int, int]] = None
 
     def _pad(self, x: NDArray) -> NDArray:
         assert len(x.shape) == 4
@@ -270,25 +277,51 @@ class Conv2D(Layer):
         assert len(x.shape) == 4
         assert x.shape[1] == self.in_channels
 
-        _, C_in, H_in, W_in = x.shape
+        B, C_in, H_in, W_in = x.shape
         C_out = self.out_channels
         H_out = int(1 + (H_in + 2 * self.padding[0] - self.kernel_size[0]) / self.strides[0])
         W_out = int(1 + (W_in + 2 * self.padding[1] - self.kernel_size[1]) / self.strides[1])
 
-        # Compute indices for im2col operation
-        idx_c, idx_h_ker, idx_w_ker = np.indices((C_in, *self.kernel_size)).reshape(3, -1)
-        idx_h_out, idx_w_out = np.indices((H_out, W_out)).reshape(2, -1)
+        if self._dims_x_f is None or self._dims_x_f[1:] != x.shape[1:]:
+            use_cached_indices = False
+            self._dims_x_f = x.shape
+        else:
+            use_cached_indices = True
 
-        idx_c = idx_c.reshape(-1, 1)
-        idx_h = idx_h_ker.reshape(-1, 1) + self.strides[0] * idx_h_out
-        idx_w = idx_w_ker.reshape(-1, 1) + self.strides[1] * idx_w_out
+        # Compute indices for im2col transformation
+        if not use_cached_indices:
+            idx_c, idx_h_ker, idx_w_ker = np.indices((C_in, *self.kernel_size)).reshape(3, -1)
+            idx_h_out, idx_w_out = np.indices((H_out, W_out)).reshape(2, -1)
 
-        self.indices = (idx_c, idx_h, idx_w)
+            idx_c = idx_c.reshape(-1, 1)
+            idx_h = idx_h_ker.reshape(-1, 1) + self.strides[0] * idx_h_out
+            idx_w = idx_w_ker.reshape(-1, 1) + self.strides[1] * idx_w_out
 
-        # Apply padding, im2col and affine transformations
+            self.dims_x_forward = x.shape
+            self._indices = (idx_c, idx_h, idx_w)
+
+        # Apply padding transformation
         x = self._pad(x)
-        x = x[(..., *self.indices)]
-        x = self.b + self.w @ x
+
+        # Apply im2col transformation
+        x = x[(..., *self._indices)]  # (B, C_in * H_ker * W_ker, H_out * W_out)
+
+        # Apply affine transformation
+        # NOTE: We use these transposes and reshapes to leverage the optimized BLAS GEMM as batched
+        # matmul in Numpy (contrary to e.g. PyTorch) with signature (N,K), (B,K,M) -> (B,N,M) is
+        # significantly slower than flattening the batch dimension nad using matmul with signature
+        # (N,K), (K,B*M) -> (N,B*M)
+        #
+        # fmt:off
+        x = x.transpose(1, 0, 2)              # (C_in * H_ker * W_ker, B, H_out * W_out)
+        x = x.reshape(-1, B * H_out * W_out)  # (C_in * H_ker * W_ker, B * H_out * W_out)
+        
+        self._x2col = x
+        x = self.b + self.w @ x               # (C_out, B * H_out * W_ou)
+        
+        x = x.reshape(-1, B, H_out * W_out)   # (C_out, B, H_out * W_ou)
+        x = x.transpose(1, 0, 2)              # (B, C_out, H_out * W_ou)
+        # fmt:on
 
         self.y = x.reshape(-1, C_out, H_out, W_out)
 
@@ -305,22 +338,41 @@ class Conv2D(Layer):
         H_out = int(1 + (H_in + 2 * self.padding[0] - self.kernel_size[0]) / self.strides[0])
         W_out = int(1 + (W_in + 2 * self.padding[1] - self.kernel_size[1]) / self.strides[1])
 
+        if self._dims_x_b is None or x.shape != self._dims_x_b:
+            use_cached_indices = False
+            self._dims_x_b = x.shape
+        else:
+            use_cached_indices = True
+
         # --- Compute ∂Loss/∂x, ∂Loss/∂w and ∂Loss/∂b
 
         # Backpropagate through reshape operation
-        grad_y = grad_y.reshape(-1, C_out, H_out * W_out)
+        grad_y = grad_y.reshape(-1, C_out, H_out * W_out)  # (B, C_out, H_out*W_out)
 
         # Backpropagate through affine transformation
-        x = self._pad(x)
-        x = x[(..., *self.indices)]
+        # fmt:off
+        x = self._x2col
 
-        grad_w = (grad_y @ x.transpose(0, 2, 1)).sum(axis=0)
-        grad_b = (grad_y.sum(axis=(0, 2))).reshape(-1, 1)
-        grad_y = self.w.T @ grad_y
+        grad_y = grad_y.transpose(1, 0, 2)                 # (C_out, B, H_out * W_out)
+        grad_y = grad_y.reshape(-1, B * H_out * W_out)     # (C_out, B * H_out * W_out)
+
+        grad_w = grad_y @ x.T
+        grad_b = grad_y.sum(axis=1, keepdims=True)
+        grad_y = self.w.T @ grad_y                         # (C_in * H_ker * W_ker, B * H_out * W_out)
+
+        grad_y = grad_y.reshape(-1, B, H_out * W_out)      # (C_in * H_ker * W_ker, B, H_out * W_out)
+        grad_y = grad_y.transpose(1, 0, 2)                 # (B, C_in * H_ker * W_ker, H_out * W_out)
+        # fmt:on
 
         # Backpropagate through im2col operation
-        grad_x = zeros(B, C_in, H_in + 2 * self.padding[0], W_in + 2 * self.padding[1])
-        np.add.at(grad_x, (..., *self.indices), grad_y)
+        dims_x = (B, C_in, H_in + 2 * self.padding[0], W_in + 2 * self.padding[1])
+
+        if not use_cached_indices:
+            multi_index = (np.arange(B).reshape(-1, 1, 1), *self._indices)
+            self._indices_ravel = np.ravel_multi_index(multi_index, dims=dims_x)
+
+        grad_x = np.bincount(self._indices_ravel.flatten(), weights=grad_y.flatten())
+        grad_x = grad_x.reshape(dims_x)
 
         # Backpropagate through padding operation
         grad_x = self._unpad(grad_x)
