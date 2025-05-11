@@ -24,8 +24,9 @@ def chunks(*arrays: NDArray, size: int):
 
 
 def onehot(y: NDArray) -> NDArray:
-    n_values = np.max(y) + 1
-    return np.eye(n_values)[y]
+    one_hot = zeros(y.shape[0], np.max(y) + 1)
+    one_hot[np.arange(y.shape[0]), y] = 1
+    return one_hot.astype(np.float32)
 
 
 def tiles(imgs: NDArray):
