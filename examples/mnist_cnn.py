@@ -53,19 +53,20 @@ params = {
 }
 
 model = nn.Sequential(
-    nn.Conv2D(1, 8, 5, 1, 0, **params["conv"]),
+    nn.Conv2D(1, 4, 5, 1, 0, **params["conv"]),
+    nn.ReLU(),
+    nn.Conv2D(4, 4, 2, 2, 0, **params["conv"]),
+    nn.ReLU(),
+    nn.Conv2D(4, 8, 5, 1, 0, **params["conv"]),
     nn.ReLU(),
     nn.Conv2D(8, 8, 2, 2, 0, **params["conv"]),
-    nn.ReLU(),
-    nn.Conv2D(8, 16, 5, 1, 0, **params["conv"]),
-    nn.ReLU(),
-    nn.Conv2D(16, 16, 2, 2, 0, **params["conv"]),
     nn.Flatten(1),
-    nn.Dropout(0.2),
-    nn.Linear(4 * 4 * 16, 200, **params["lin"]),
     nn.ReLU(),
     nn.Dropout(0.5),
-    nn.Linear(200, 10, **params["lin"]),
+    nn.Linear(4 * 4 * 8, 64, **params["lin"]),
+    nn.ReLU(),
+    nn.Dropout(0.5),
+    nn.Linear(64, 10, **params["lin"]),
 )
 
 # %%
@@ -75,7 +76,7 @@ batch_size = 128
 num_epochs = 50
 
 for epoch in (pbar := trange(num_epochs)):
-    dataloader = chunks(X_train, y_train, size=batch_size)
+    dataloader = zip(chunks(X_train, batch_size), chunks(y_train, batch_size))
     total = ceil(len(X_train) / batch_size)
 
     # Training phase

@@ -63,7 +63,7 @@ batch_size = 128
 num_epochs = 50
 
 for epoch in (pbar := trange(num_epochs)):
-    dataloader = chunks(X_train, y_train, size=batch_size)
+    dataloader = zip(chunks(X_train, batch_size), chunks(y_train, batch_size))
     total = ceil(len(X_train) / batch_size)
 
     # Training phase
