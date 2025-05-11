@@ -252,7 +252,7 @@ class Conv2D(Layer):
         # Outputs
         self.y: Optional[NDArray] = None
 
-        # TODO: description
+        # Indices for the im2col operation, required for backpropagation
         self.indices: Optional[tuple[NDArray, NDArray, NDArray]] = None
 
     def _pad(self, x: NDArray) -> NDArray:
@@ -271,13 +271,12 @@ class Conv2D(Layer):
         assert x.shape[1] == self.in_channels
 
         _, C_in, H_in, W_in = x.shape
-        H_ker, W_ker = self.kernel_size
-
         C_out = self.out_channels
         H_out = int(1 + (H_in + 2 * self.padding[0] - self.kernel_size[0]) / self.strides[0])
         W_out = int(1 + (W_in + 2 * self.padding[1] - self.kernel_size[1]) / self.strides[1])
 
-        idx_c, idx_h_ker, idx_w_ker = np.indices((C_in, H_ker, W_ker)).reshape(3, -1)
+        # Compute indices for im2col operation
+        idx_c, idx_h_ker, idx_w_ker = np.indices((C_in, *self.kernel_size)).reshape(3, -1)
         idx_h_out, idx_w_out = np.indices((H_out, W_out)).reshape(2, -1)
 
         idx_c = idx_c.reshape(-1, 1)
@@ -286,6 +285,7 @@ class Conv2D(Layer):
 
         self.indices = (idx_c, idx_h, idx_w)
 
+        # Apply padding, im2col and affine transformations
         x = self._pad(x)
         x = x[(..., *self.indices)]
         x = self.b + self.w @ x
@@ -295,18 +295,61 @@ class Conv2D(Layer):
         return self.y
 
     def backward(self, x: NDArray, grad_y: NDArray) -> NDArray:
-        _, C_in, H_in, W_in = x.shape
+        assert len(grad_y.shape) == 4
+        assert len(x.shape) == 4
+        assert x.shape[1] == self.in_channels
+        assert grad_y.shape[1] == self.out_channels
+
+        B, C_in, H_in, W_in = x.shape
         C_out = self.out_channels
         H_out = int(1 + (H_in + 2 * self.padding[0] - self.kernel_size[0]) / self.strides[0])
         W_out = int(1 + (W_in + 2 * self.padding[1] - self.kernel_size[1]) / self.strides[1])
 
-        grad_x = grad_y.reshape(-1, C_out, H_out * W_out)
+        # --- Compute ∂Loss/∂x, ∂Loss/∂w and ∂Loss/∂b
 
-        grad_w = (grad_x @ x.transpose(0, 2, 1)).sum(axis=0)
-        grad_b = grad_x.sum(axis=(0, 2)).reshape(-1, 1)
-        grad_x = self.w.T @ grad_x
+        # Backpropagate through reshape operation
+        grad_y = grad_y.reshape(-1, C_out, H_out * W_out)
 
-        # TODO
-        raise NotImplementedError
+        # Backpropagate through affine transformation
+        x = self._pad(x)
+        x = x[(..., *self.indices)]
 
+        grad_w = (grad_y @ x.transpose(0, 2, 1)).sum(axis=0)
+        grad_b = (grad_y.sum(axis=(0, 2))).reshape(-1, 1)
+        grad_y = self.w.T @ grad_y
+
+        # Backpropagate through im2col operation
+        grad_x = zeros(B, C_in, H_in + 2 * self.padding[0], W_in + 2 * self.padding[1])
+        np.add.at(grad_x, (..., *self.indices), grad_y)
+
+        # Backpropagate through padding operation
         grad_x = self._unpad(grad_x)
+
+        # --- Update params
+        self.m_w = self.momentum * self.m_w - self.lr * grad_w
+        self.m_b = self.momentum * self.m_b - self.lr * grad_b
+
+        self.w += self.m_w
+        self.b += self.m_b
+
+        # Propagate ∂Loss/∂x backward
+        return grad_x
+
+
+class Flatten(Layer):
+    def __init__(self, start_dim: int = 1):
+        self.start_dim: int = start_dim
+        self.reset()
+
+    def reset(self):
+        self.y: Optional[NDArray] = None
+
+    def forward(self, x: NDArray, training: bool) -> NDArray:
+        self.y = x.reshape(*x.shape[: self.start_dim], -1)
+        return self.y
+
+    def backward(self, x: NDArray, grad_y: NDArray) -> NDArray:
+        # Compute ∂Loss/∂x
+        grad_x = grad_y.reshape(x.shape)
+        # Propagate ∂Loss/∂x backward
+        return grad_x
