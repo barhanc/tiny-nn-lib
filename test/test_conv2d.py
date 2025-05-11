@@ -7,13 +7,13 @@ import numpy as np
 # torch.manual_seed(42)
 torch.set_default_device("cpu")
 
-batch_size = 5
+batch_size = 64
 in_channels = 3
 out_channels = 2
-h_in = 8
-w_in = 8
+h_in = 64
+w_in = 64
 kernel_size = (3, 3)
-stride = (3, 3)
+stride = (1, 1)
 padding = (1, 1)
 
 h_out = int(1 + (h_in + 2 * padding[0] - kernel_size[0]) / stride[0])

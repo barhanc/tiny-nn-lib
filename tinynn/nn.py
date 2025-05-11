@@ -297,7 +297,6 @@ class Conv2D(Layer):
             idx_h = idx_h_ker.reshape(-1, 1) + self.strides[0] * idx_h_out
             idx_w = idx_w_ker.reshape(-1, 1) + self.strides[1] * idx_w_out
 
-            self.dims_x_forward = x.shape
             self._indices = (idx_c, idx_h, idx_w)
 
         # Apply padding transformation
