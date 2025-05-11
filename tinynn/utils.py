@@ -15,12 +15,8 @@ def randn(*dims: int) -> NDArray[np.float32]:
     return np.random.randn(*dims).astype(np.float32)
 
 
-def chunks(*arrays: NDArray, size: int):
-    n = len(arrays[0])
-    assert all(len(arr) == n for arr in arrays)
-    for i in range(0, n, size):
-        batch = tuple(arr[i : i + size] for arr in arrays)
-        yield batch[0] if len(batch) == 1 else batch
+def chunks(arr: NDArray, size: int):
+    return (arr[i : i + size] for i in range(0, len(arr), size))
 
 
 def onehot(y: NDArray) -> NDArray:
