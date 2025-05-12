@@ -130,6 +130,25 @@ class Dropout(Layer):
         return grad_x
 
 
+class Flatten(Layer):
+    def __init__(self, start_dim: int = 1):
+        self.start_dim: int = start_dim
+        self.reset()
+
+    def reset(self):
+        self.y: Optional[NDArray] = None
+
+    def forward(self, x: NDArray, training: bool) -> NDArray:
+        self.y = x.reshape(*x.shape[: self.start_dim], -1)
+        return self.y
+
+    def backward(self, x: NDArray, grad_y: NDArray) -> NDArray:
+        # Compute ∂Loss/∂x
+        grad_x = grad_y.reshape(x.shape)
+        # Propagate ∂Loss/∂x backward
+        return grad_x
+
+
 class Linear(Layer):
     def __init__(
         self,
@@ -243,7 +262,7 @@ class Conv2D(Layer):
                 raise ValueError(f"Unrecognised {self.init_method=}")
 
         # Bias initialization
-        eps = 1e-2  # Initialize biases to small positive values (for ReLU)
+        eps = 0.01  # Initialize biases to small positive values (for ReLU)
         self.b = zeros(self.out_channels, 1) + eps
 
         # Velocity (momentum) tensors initialization
@@ -358,24 +377,5 @@ class Conv2D(Layer):
         self.w += self.m_w
         self.b += self.m_b
 
-        # Propagate ∂Loss/∂x backward
-        return grad_x
-
-
-class Flatten(Layer):
-    def __init__(self, start_dim: int = 1):
-        self.start_dim: int = start_dim
-        self.reset()
-
-    def reset(self):
-        self.y: Optional[NDArray] = None
-
-    def forward(self, x: NDArray, training: bool) -> NDArray:
-        self.y = x.reshape(*x.shape[: self.start_dim], -1)
-        return self.y
-
-    def backward(self, x: NDArray, grad_y: NDArray) -> NDArray:
-        # Compute ∂Loss/∂x
-        grad_x = grad_y.reshape(x.shape)
         # Propagate ∂Loss/∂x backward
         return grad_x
