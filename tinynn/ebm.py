@@ -108,7 +108,8 @@ class DBN:
         i = len(self.layers) - 1
         v = self.propagate_up(v, i)
         h = self.layers[i].sample(v, steps, verbose)
-        return self.propagate_dn(h, i)
+        v = self.propagate_dn(h, i)
+        return v
 
 
 def cdk_step(rbm: RBM, minibatch: NDArray, k: int = 1):
@@ -147,6 +148,7 @@ def cdk_step(rbm: RBM, minibatch: NDArray, k: int = 1):
     # Apply L1 / L2 regularization
     if rbm.l1_penalty:
         grad_w += rbm.l1_penalty * np.sign(rbm.w)
+
     if rbm.l2_penalty:
         grad_w += rbm.l2_penalty * rbm.w
 
