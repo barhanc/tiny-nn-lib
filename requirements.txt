@@ -1,4 +1,4 @@
 numpy
 tqdm
-matplotlib
 mnists
+matplotlib
