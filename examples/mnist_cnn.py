@@ -62,10 +62,8 @@ model = nn.Sequential(
     nn.Conv2D(8, 8, 2, 2, 0, **params["conv"]),
     nn.Flatten(1),
     nn.ReLU(),
-    nn.Dropout(0.5),
     nn.Linear(4 * 4 * 8, 64, **params["lin"]),
     nn.ReLU(),
-    nn.Dropout(0.5),
     nn.Linear(64, 10, **params["lin"]),
 )
 
